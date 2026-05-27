@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XHRIS SESSIONS V2 — Générateur de Session WhatsApp</title>
+<link rel="icon" type="image/png" href="https://xhrishost.site/icon-192.png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+  body {
+    background: #0a0a0f;
+    color: #fff;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    z-index: 0;
+  }
+
+  .bg-glow {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+    top: -200px;
+    right: -200px;
+    z-index: 0;
+    filter: blur(60px);
+  }
+
+  .bg-glow-2 {
+    position: fixed;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, transparent 70%);
+    border-radius: 50%;
+    bottom: -150px;
+    left: -150px;
+    z-index: 0;
+    filter: blur(60px);
+  }
+
+  nav {
+    position: relative;
+    z-index: 10;
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(10px);
+    background: rgba(10, 10, 15, 0.6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 800;
+    font-size: 1.25rem;
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+  }
+
+  .nav-links a {
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover { color: #fff; }
+
+  .hero {
+    position: relative;
+    z-index: 5;
+    padding: 6rem 2rem 4rem;
+    text-align: center;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c4b5fd;
+    padding: 0.5rem 1rem;
+    border-radius: 100px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 2rem;
+  }
+
+  .badge::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #10b981;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, #fff 0%, #c4b5fd 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero h1 .accent {
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero p {
+    font-size: 1.125rem;
+    color: rgba(255, 255, 255, 0.7);
+    max-width: 600px;
+    margin: 0 auto 2.5rem;
+    line-height: 1.6;
+  }
+
+  .methods {
+    position: relative;
+    z-index: 5;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  @media (max-width: 640px) {
+    .methods { grid-template-columns: 1fr; }
+  }
+
+  .method-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 2rem;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  .method-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.05));
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .method-card:hover::before { opacity: 1; }
+  .method-card:hover {
+    border-color: rgba(139, 92, 246, 0.4);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(139, 92, 246, 0.15);
+  }
+
+  .method-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    margin-bottom: 1.25rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .method-card h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .method-card p {
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+  }
+
+  .method-card .arrow {
+    position: absolute;
+    top: 2rem;
+    right: 2rem;
+    color: rgba(255, 255, 255, 0.4);
+    transition: all 0.3s;
+  }
+
+  .method-card:hover .arrow {
+    color: #c4b5fd;
+    transform: translate(4px, -4px);
+  }
+
+  .features {
+    position: relative;
+    z-index: 5;
+    max-width: 1100px;
+    margin: 6rem auto 4rem;
+    padding: 0 2rem;
+  }
+
+  .features-title {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .features-title h2 {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+  }
+
+  .features-title p {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .feature {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    padding: 1.5rem;
+    transition: all 0.2s;
+  }
+
+  .feature:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(139, 92, 246, 0.2);
+  }
+
+  .feature-icon {
+    width: 44px;
+    height: 44px;
+    background: rgba(139, 92, 246, 0.15);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .feature h4 {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .feature p {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+  }
+
+  footer {
+    position: relative;
+    z-index: 5;
+    padding: 2rem;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.875rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: 4rem;
+  }
+
+  footer a {
+    color: #c4b5fd;
+    text-decoration: none;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+  <div class="bg-glow-2"></div>
+
+  <nav>
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      XHRIS SESSIONS
+    </div>
+    <div class="nav-links">
+      <a href="https://xhrishost.site">Hébergement</a>
+      <a href="https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31" target="_blank">Chaîne</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="badge">Service en ligne</div>
+    <h1>Générateur de Session <span class="accent">WhatsApp</span></h1>
+    <p>Obtenez votre SESSION_ID en quelques secondes pour déployer votre bot XHRIS MD V2 sur XHRIS HOST.</p>
+  </section>
+
+  <section class="methods">
+    <a href="/pair" class="method-card">
+      <div class="method-icon">📱</div>
+      <h3>Par Pair Code</h3>
+      <p>Méthode recommandée. Entrez votre numéro et obtenez un code à 8 caractères à coller dans WhatsApp.</p>
+      <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </a>
+
+    <a href="/qrscan.html" class="method-card">
+      <div class="method-icon">📷</div>
+      <h3>Par QR Code</h3>
+      <p>Scannez un QR code depuis WhatsApp → Appareils liés. Plus rapide si vous avez le téléphone à portée.</p>
+      <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M5 12h14M12 5l7 7-7 7"/>
+      </svg>
+    </a>
+  </section>
+
+  <section class="features">
+    <div class="features-title">
+      <h2>Pourquoi XHRIS Sessions ?</h2>
+      <p>Le générateur le plus rapide et fiable pour vos bots WhatsApp</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature">
+        <div class="feature-icon">⚡</div>
+        <h4>Ultra rapide</h4>
+        <p>Génération en moins de 30 secondes via pair code WhatsApp.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🔒</div>
+        <h4>100% sécurisé</h4>
+        <p>Vos sessions sont chiffrées et envoyées directement sur votre WhatsApp.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🇨🇲</div>
+        <h4>Local au Cameroun</h4>
+        <p>Optimisé pour les utilisateurs camerounais et africains.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon">🚀</div>
+        <h4>1-Click Deploy</h4>
+        <p>Connectez votre session à XHRIS HOST pour un déploiement instantané.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>© 2026 <a href="https://xhrishost.site">XHRIS TECH</a> · Tous droits réservés</p>
+  </footer>
+</body>
+</html>

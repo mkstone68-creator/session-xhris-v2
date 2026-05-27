@@ -1,0 +1,13 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/pritech-bots/home/princemd-session/public_html/
+    - /bin/cp -R images $DEPLOYPATH
+    
+
+
+
+
+
+
+

@@ -1,0 +1,17 @@
+{
+    "name": "PRINCE Session Generator",
+    "description": "Web Session Generator",
+    "logo": "https://github.com/Mayelprince.png",
+    "repository": "https://github.com/Mayelprince/PRINCE-MDXI",
+    "keywords": ["Prince-Tech"],
+    "success_url": "/", 
+    "buildpacks": [{ "url": "https://github.com/heroku/heroku-buildpack-nodejs#latest" } ],
+    "env": {      
+      "PORT": {
+        "description": "Port for web app.4000,5000,3000... any!",
+        "value": "5000",
+        "required": false 
+      }
+    }   
+
+}

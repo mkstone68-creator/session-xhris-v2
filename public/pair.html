@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XHRIS SESSIONS — Pair Code</title>
+<link rel="icon" type="image/png" href="https://xhrishost.site/icon-192.png">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+
+  body {
+    background: #0a0a0f;
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  .bg-grid {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    z-index: 0;
+  }
+
+  .bg-glow {
+    position: fixed;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+    top: -200px;
+    right: -200px;
+    z-index: 0;
+    filter: blur(60px);
+  }
+
+  nav {
+    position: relative;
+    z-index: 10;
+    padding: 1.5rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    backdrop-filter: blur(10px);
+    background: rgba(10, 10, 15, 0.6);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 800;
+    font-size: 1.25rem;
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-decoration: none;
+  }
+
+  .logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
+  }
+
+  main {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    position: relative;
+    z-index: 5;
+  }
+
+  .card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 3rem 2.5rem;
+    max-width: 480px;
+    width: 100%;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+  }
+
+  .card-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .card-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    border-radius: 18px;
+    margin: 0 auto 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+  }
+
+  .card h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+  }
+
+  .card-subtitle {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9375rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .form-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-group input {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 1rem;
+    transition: all 0.2s;
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: #a855f7;
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.15);
+  }
+
+  .form-group input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  button.submit {
+    width: 100%;
+    padding: 1rem;
+    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 10px 30px rgba(139, 92, 246, 0.3);
+  }
+
+  button.submit:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 40px rgba(139, 92, 246, 0.4);
+  }
+
+  button.submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .result {
+    margin-top: 1.5rem;
+    text-align: center;
+    display: none;
+  }
+
+  .result.active { display: block; }
+
+  .code-display {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+  }
+
+  .code-label {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 0.5rem;
+  }
+
+  .code-value {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    cursor: pointer;
+    user-select: all;
+  }
+
+  .copy-hint {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 0.5rem;
+  }
+
+  .instructions {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    padding: 1rem;
+    margin-top: 1rem;
+    text-align: left;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .instructions ol {
+    padding-left: 1.25rem;
+    margin-top: 0.5rem;
+  }
+
+  .instructions li {
+    margin: 0.25rem 0;
+  }
+
+  .error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 0.875rem 1rem;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    margin-top: 1rem;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  footer {
+    text-align: center;
+    padding: 1.5rem;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.875rem;
+    position: relative;
+    z-index: 5;
+  }
+
+  footer a {
+    color: #c4b5fd;
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <nav>
+    <a href="/" class="logo">
+      <div class="logo-icon">⚡</div>
+      XHRIS SESSIONS
+    </a>
+  </nav>
+
+  <main>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon">📱</div>
+        <h1>Générer votre Pair Code</h1>
+        <p class="card-subtitle">Entrez votre numéro WhatsApp pour recevoir un code</p>
+      </div>
+
+      <form id="pairForm">
+        <div class="form-group">
+          <label for="number">Numéro WhatsApp (avec indicatif)</label>
+          <input
+            type="tel"
+            id="number"
+            placeholder="237694600007"
+            required
+            pattern="[0-9]{8,15}"
+          />
+        </div>
+
+        <button type="submit" class="submit" id="submitBtn">
+          Obtenir mon code
+        </button>
+      </form>
+
+      <div class="result" id="result">
+        <div class="code-display">
+          <div class="code-label">Votre code de pairing</div>
+          <div class="code-value" id="codeValue" onclick="navigator.clipboard.writeText(this.textContent.replace(/\s/g, ''))">--------</div>
+          <div class="copy-hint">Cliquez pour copier</div>
+        </div>
+
+        <div class="instructions">
+          <strong>Comment l'utiliser :</strong>
+          <ol>
+            <li>Ouvrez WhatsApp sur votre téléphone</li>
+            <li>Allez dans Paramètres → Appareils liés</li>
+            <li>Tapez sur "Lier un appareil"</li>
+            <li>Choisissez "Lier avec un numéro de téléphone"</li>
+            <li>Entrez le code ci-dessus</li>
+            <li>Votre session SESSION_ID arrivera sur WhatsApp dans quelques secondes</li>
+          </ol>
+        </div>
+      </div>
+
+      <div id="error" class="error" style="display: none;"></div>
+    </div>
+  </main>
+
+  <footer>
+    <p>© 2026 <a href="https://xhrishost.site">XHRIS TECH</a> · <a href="/">Retour</a></p>
+  </footer>
+
+  <script>
+    const form = document.getElementById('pairForm');
+    const btn = document.getElementById('submitBtn');
+    const result = document.getElementById('result');
+    const errorBox = document.getElementById('error');
+    const codeValue = document.getElementById('codeValue');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorBox.style.display = 'none';
+      result.classList.remove('active');
+
+      const number = document.getElementById('number').value.replace(/[^0-9]/g, '');
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Génération...';
+
+      try {
+        const res = await fetch(`/code?number=${number}`);
+        const data = await res.json();
+
+        if (data.code) {
+          codeValue.textContent = data.code.match(/.{1,4}/g).join(' ');
+          result.classList.add('active');
+        } else {
+          throw new Error(data.error || 'Erreur lors de la génération');
+        }
+      } catch (e) {
+        errorBox.textContent = '❌ ' + e.message;
+        errorBox.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Obtenir mon code';
+      }
+    });
+  </script>
+</body>
+</html>
