@@ -1,412 +1,444 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>XHRIS SESSIONS V2 — Générateur de Session WhatsApp</title>
+<title>XHRIS Sessions V2</title>
 <link rel="icon" type="image/png" href="https://xhrishost.site/icon-192.png">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+:root {
+  --bg: #0c0c12;
+  --surface: rgba(255,255,255,0.03);
+  --border: rgba(255,255,255,0.07);
+  --border-hover: rgba(139,92,246,0.4);
+  --purple: #8b5cf6;
+  --pink: #ec4899;
+  --text: #f1f0f5;
+  --muted: rgba(241,240,245,0.5);
+  --radius: 14px;
+}
 
-  body {
-    background: #0a0a0f;
-    color: #fff;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+* { margin:0; padding:0; box-sizing:border-box; }
+html { font-size: 15px; }
 
-  .bg-grid {
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(139, 92, 246, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(139, 92, 246, 0.03) 1px, transparent 1px);
-    background-size: 50px 50px;
-    z-index: 0;
-  }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.5;
+}
 
-  .bg-glow {
-    position: fixed;
-    width: 600px;
-    height: 600px;
-    background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%);
-    border-radius: 50%;
-    top: -200px;
-    right: -200px;
-    z-index: 0;
-    filter: blur(60px);
-  }
+/* ── Background ── */
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0;
+  background-image:
+    linear-gradient(rgba(139,92,246,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139,92,246,.025) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none;
+}
+.bg-glow {
+  position: fixed; z-index: 0; pointer-events: none;
+  width: 480px; height: 480px; border-radius: 50%;
+  filter: blur(80px);
+}
+.bg-glow-1 { background: radial-gradient(circle, rgba(139,92,246,.13) 0%, transparent 70%); top:-160px; right:-160px; }
+.bg-glow-2 { background: radial-gradient(circle, rgba(236,72,153,.08) 0%, transparent 70%); bottom:-120px; left:-120px; }
 
-  .bg-glow-2 {
-    position: fixed;
-    width: 500px;
-    height: 500px;
-    background: radial-gradient(circle, rgba(168, 85, 247, 0.1) 0%, transparent 70%);
-    border-radius: 50%;
-    bottom: -150px;
-    left: -150px;
-    z-index: 0;
-    filter: blur(60px);
-  }
+/* ── Nav ── */
+nav {
+  position: relative; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .75rem 1.25rem;
+  background: rgba(12,12,18,.8);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+}
 
-  nav {
-    position: relative;
-    z-index: 10;
-    padding: 1.5rem 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    backdrop-filter: blur(10px);
-    background: rgba(10, 10, 15, 0.6);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  }
+.logo {
+  display: flex; align-items: center; gap: .5rem;
+  font-size: .9375rem; font-weight: 700; letter-spacing: -.01em;
+  background: linear-gradient(135deg, #a78bfa, var(--pink));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.logo-mark {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 16px rgba(139,92,246,.4);
+  flex-shrink: 0;
+}
+.logo-mark svg { width: 16px; height: 16px; fill: #fff; }
 
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-weight: 800;
-    font-size: 1.25rem;
-    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
+.nav-right { display: flex; align-items: center; gap: .5rem; }
 
-  .logo-icon {
-    width: 40px;
-    height: 40px;
-    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    box-shadow: 0 0 30px rgba(139, 92, 246, 0.5);
-  }
+.nav-link {
+  font-size: .8125rem; font-weight: 500; color: var(--muted);
+  text-decoration: none; padding: .35rem .65rem; border-radius: 7px;
+  transition: color .15s, background .15s;
+}
+.nav-link:hover { color: var(--text); background: rgba(255,255,255,.05); }
 
-  .nav-links {
-    display: flex;
-    gap: 1.5rem;
-    align-items: center;
-  }
+.lang-btn {
+  display: flex; align-items: center; gap: .3rem;
+  font-size: .8125rem; font-weight: 600; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 7px; padding: .3rem .65rem;
+  cursor: pointer; transition: all .15s; letter-spacing: .03em;
+}
+.lang-btn:hover { color: var(--text); border-color: rgba(255,255,255,.15); }
+.lang-btn svg { width: 13px; height: 13px; opacity: .6; }
 
-  .nav-links a {
-    color: rgba(255, 255, 255, 0.7);
-    text-decoration: none;
-    font-weight: 500;
-    transition: color 0.2s;
-  }
+/* ── Hero ── */
+.hero {
+  position: relative; z-index: 5;
+  max-width: 640px; margin: 0 auto;
+  padding: 3rem 1.25rem 2rem;
+  text-align: center;
+}
 
-  .nav-links a:hover { color: #fff; }
+.status-pill {
+  display: inline-flex; align-items: center; gap: .4rem;
+  background: rgba(16,185,129,.08); border: 1px solid rgba(16,185,129,.2);
+  color: #6ee7b7; border-radius: 100px;
+  font-size: .75rem; font-weight: 600; letter-spacing: .04em;
+  padding: .3rem .75rem; margin-bottom: 1.5rem;
+  text-transform: uppercase;
+}
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #10b981; box-shadow: 0 0 6px #10b981;
+  animation: blink 2s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
 
-  .hero {
-    position: relative;
-    z-index: 5;
-    padding: 6rem 2rem 4rem;
-    text-align: center;
-    max-width: 900px;
-    margin: 0 auto;
-  }
+.hero h1 {
+  font-size: clamp(1.6rem, 5vw, 2.5rem);
+  font-weight: 800; letter-spacing: -.03em; line-height: 1.15;
+  margin-bottom: .9rem;
+}
+.hero h1 .grad {
+  background: linear-gradient(135deg, #a78bfa 0%, var(--pink) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero p {
+  font-size: .9375rem; color: var(--muted);
+  max-width: 440px; margin: 0 auto;
+}
 
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(139, 92, 246, 0.1);
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    color: #c4b5fd;
-    padding: 0.5rem 1rem;
-    border-radius: 100px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    margin-bottom: 2rem;
-  }
+/* ── Method cards ── */
+.methods {
+  position: relative; z-index: 5;
+  max-width: 640px; margin: 0 auto;
+  padding: 0 1.25rem 2.5rem;
+  display: grid; grid-template-columns: 1fr 1fr; gap: .875rem;
+}
+@media(max-width:480px){ .methods{ grid-template-columns:1fr; } }
 
-  .badge::before {
-    content: '';
-    width: 8px;
-    height: 8px;
-    background: #10b981;
-    border-radius: 50%;
-    box-shadow: 0 0 10px #10b981;
-    animation: pulse 2s infinite;
-  }
+.method-card {
+  display: block; text-decoration: none; color: inherit;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.25rem;
+  position: relative; overflow: hidden;
+  transition: border-color .2s, transform .2s, box-shadow .2s;
+}
+.method-card::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit;
+  background: linear-gradient(135deg, rgba(139,92,246,.07), rgba(236,72,153,.04));
+  opacity: 0; transition: opacity .2s;
+}
+.method-card:hover { border-color: var(--border-hover); transform: translateY(-2px); box-shadow: 0 12px 28px rgba(139,92,246,.12); }
+.method-card:hover::after { opacity: 1; }
 
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-  }
+.card-icon-wrap {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: .875rem; position: relative; z-index: 1;
+  box-shadow: 0 4px 14px rgba(139,92,246,.25);
+}
+.card-icon-wrap svg { width: 20px; height: 20px; stroke: #fff; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-  .hero h1 {
-    font-size: clamp(2.5rem, 6vw, 4.5rem);
-    font-weight: 900;
-    line-height: 1.1;
-    margin-bottom: 1.5rem;
-    background: linear-gradient(135deg, #fff 0%, #c4b5fd 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
+.method-card h3 {
+  font-size: .9375rem; font-weight: 700; margin-bottom: .3rem;
+  position: relative; z-index: 1;
+}
+.method-card p {
+  font-size: .8125rem; color: var(--muted); line-height: 1.5;
+  position: relative; z-index: 1;
+}
 
-  .hero h1 .accent {
-    background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
+.card-badge {
+  display: inline-flex; align-items: center;
+  font-size: .6875rem; font-weight: 600; letter-spacing: .04em;
+  background: rgba(139,92,246,.15); color: #c4b5fd;
+  border-radius: 4px; padding: .15rem .4rem; margin-top: .6rem;
+  position: relative; z-index: 1;
+}
 
-  .hero p {
-    font-size: 1.125rem;
-    color: rgba(255, 255, 255, 0.7);
-    max-width: 600px;
-    margin: 0 auto 2.5rem;
-    line-height: 1.6;
-  }
+.card-arrow {
+  position: absolute; top: 1rem; right: 1rem; z-index: 1;
+  color: rgba(255,255,255,.2); transition: color .2s, transform .2s;
+}
+.method-card:hover .card-arrow { color: #c4b5fd; transform: translate(2px,-2px); }
+.card-arrow svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-  .methods {
-    position: relative;
-    z-index: 5;
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 0 2rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-  }
+/* ── Features ── */
+.features {
+  position: relative; z-index: 5;
+  max-width: 640px; margin: 0 auto;
+  padding: 0 1.25rem 3rem;
+}
+.section-label {
+  font-size: .7rem; font-weight: 700; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase;
+  text-align: center; margin-bottom: 1rem;
+}
+.features-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: .625rem;
+}
+@media(max-width:480px){ .features-grid{ grid-template-columns:1fr; } }
 
-  @media (max-width: 640px) {
-    .methods { grid-template-columns: 1fr; }
-  }
+.feat {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: .875rem 1rem;
+  display: flex; align-items: flex-start; gap: .65rem;
+  transition: border-color .15s;
+}
+.feat:hover { border-color: rgba(255,255,255,.12); }
+.feat-icon {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  background: rgba(139,92,246,.12);
+  display: flex; align-items: center; justify-content: center;
+}
+.feat-icon svg { width: 16px; height: 16px; stroke: #a78bfa; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.feat h4 { font-size: .8125rem; font-weight: 600; margin-bottom: .15rem; }
+.feat p { font-size: .75rem; color: var(--muted); line-height: 1.45; }
 
-  .method-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 20px;
-    padding: 2rem;
-    text-decoration: none;
-    color: inherit;
-    transition: all 0.3s;
-    position: relative;
-    overflow: hidden;
-    cursor: pointer;
-  }
+/* ── Divider ── */
+.divider {
+  max-width: 640px; margin: 0 auto 1.5rem;
+  padding: 0 1.25rem;
+}
+.divider-line {
+  border: none; border-top: 1px solid var(--border); margin: 0;
+}
 
-  .method-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(236, 72, 153, 0.05));
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-
-  .method-card:hover::before { opacity: 1; }
-  .method-card:hover {
-    border-color: rgba(139, 92, 246, 0.4);
-    transform: translateY(-4px);
-    box-shadow: 0 20px 40px rgba(139, 92, 246, 0.15);
-  }
-
-  .method-icon {
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.75rem;
-    margin-bottom: 1.25rem;
-    position: relative;
-    z-index: 1;
-  }
-
-  .method-card h3 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 0.5rem;
-    position: relative;
-    z-index: 1;
-  }
-
-  .method-card p {
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.5;
-    position: relative;
-    z-index: 1;
-  }
-
-  .method-card .arrow {
-    position: absolute;
-    top: 2rem;
-    right: 2rem;
-    color: rgba(255, 255, 255, 0.4);
-    transition: all 0.3s;
-  }
-
-  .method-card:hover .arrow {
-    color: #c4b5fd;
-    transform: translate(4px, -4px);
-  }
-
-  .features {
-    position: relative;
-    z-index: 5;
-    max-width: 1100px;
-    margin: 6rem auto 4rem;
-    padding: 0 2rem;
-  }
-
-  .features-title {
-    text-align: center;
-    margin-bottom: 3rem;
-  }
-
-  .features-title h2 {
-    font-size: 2rem;
-    font-weight: 800;
-    margin-bottom: 0.5rem;
-  }
-
-  .features-title p {
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  .features-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 1.5rem;
-  }
-
-  .feature {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
-    padding: 1.5rem;
-    transition: all 0.2s;
-  }
-
-  .feature:hover {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(139, 92, 246, 0.2);
-  }
-
-  .feature-icon {
-    width: 44px;
-    height: 44px;
-    background: rgba(139, 92, 246, 0.15);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    margin-bottom: 1rem;
-  }
-
-  .feature h4 {
-    font-size: 1.0625rem;
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-  }
-
-  .feature p {
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.5;
-  }
-
-  footer {
-    position: relative;
-    z-index: 5;
-    padding: 2rem;
-    text-align: center;
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 0.875rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    margin-top: 4rem;
-  }
-
-  footer a {
-    color: #c4b5fd;
-    text-decoration: none;
-    font-weight: 500;
-  }
+/* ── Footer ── */
+footer {
+  position: relative; z-index: 5;
+  border-top: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+  text-align: center;
+  font-size: .75rem; color: var(--muted);
+}
+footer a { color: #a78bfa; text-decoration: none; font-weight: 500; }
+footer a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
-  <div class="bg-grid"></div>
-  <div class="bg-glow"></div>
-  <div class="bg-glow-2"></div>
+<div class="bg-grid"></div>
+<div class="bg-glow bg-glow-1"></div>
+<div class="bg-glow bg-glow-2"></div>
 
-  <nav>
-    <div class="logo">
-      <div class="logo-icon">⚡</div>
-      XHRIS SESSIONS
+<!-- NAV -->
+<nav>
+  <div class="logo">
+    <div class="logo-mark">
+      <!-- Zap icon -->
+      <svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
     </div>
-    <div class="nav-links">
-      <a href="https://xhrishost.site">Hébergement</a>
-      <a href="https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31" target="_blank">Chaîne</a>
+    XHRIS Sessions
+  </div>
+
+  <div class="nav-right">
+    <a href="https://xhrishost.site" class="nav-link" target="_blank" data-i18n="nav.host">Hébergement</a>
+    <a href="https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31" class="nav-link" target="_blank" data-i18n="nav.channel">Chaîne</a>
+    <button class="lang-btn" id="langToggle" aria-label="Toggle language">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      <span id="langLabel">EN</span>
+    </button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="status-pill">
+    <span class="status-dot"></span>
+    <span data-i18n="status">Opérationnel</span>
+  </div>
+  <h1>
+    <span data-i18n="hero.title">Générateur de session</span><br>
+    <span class="grad">WhatsApp</span>
+  </h1>
+  <p data-i18n="hero.sub">Obtenez votre SESSION_ID en quelques secondes pour déployer votre bot XHRIS MD V2.</p>
+</section>
+
+<!-- METHOD CARDS -->
+<section class="methods">
+  <a href="/pair" class="method-card">
+    <div class="card-arrow">
+      <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
     </div>
-  </nav>
-
-  <section class="hero">
-    <div class="badge">Service en ligne</div>
-    <h1>Générateur de Session <span class="accent">WhatsApp</span></h1>
-    <p>Obtenez votre SESSION_ID en quelques secondes pour déployer votre bot XHRIS MD V2 sur XHRIS HOST.</p>
-  </section>
-
-  <section class="methods">
-    <a href="/pair" class="method-card">
-      <div class="method-icon">📱</div>
-      <h3>Par Pair Code</h3>
-      <p>Méthode recommandée. Entrez votre numéro et obtenez un code à 8 caractères à coller dans WhatsApp.</p>
-      <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M5 12h14M12 5l7 7-7 7"/>
-      </svg>
-    </a>
-
-    <a href="/qrscan.html" class="method-card">
-      <div class="method-icon">📷</div>
-      <h3>Par QR Code</h3>
-      <p>Scannez un QR code depuis WhatsApp → Appareils liés. Plus rapide si vous avez le téléphone à portée.</p>
-      <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M5 12h14M12 5l7 7-7 7"/>
-      </svg>
-    </a>
-  </section>
-
-  <section class="features">
-    <div class="features-title">
-      <h2>Pourquoi XHRIS Sessions ?</h2>
-      <p>Le générateur le plus rapide et fiable pour vos bots WhatsApp</p>
+    <div class="card-icon-wrap">
+      <!-- Smartphone icon -->
+      <svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
     </div>
-    <div class="features-grid">
-      <div class="feature">
-        <div class="feature-icon">⚡</div>
-        <h4>Ultra rapide</h4>
-        <p>Génération en moins de 30 secondes via pair code WhatsApp.</p>
+    <h3 data-i18n="card.pair.title">Pair Code</h3>
+    <p data-i18n="card.pair.desc">Entrez votre numéro, recevez un code à 8 chiffres à saisir dans WhatsApp.</p>
+    <div class="card-badge" data-i18n="card.pair.badge">Recommandé</div>
+  </a>
+
+  <a href="/qrscan.html" class="method-card">
+    <div class="card-arrow">
+      <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </div>
+    <div class="card-icon-wrap">
+      <!-- QR / Scan icon -->
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="5"/><rect x="16" y="3" width="5" height="5"/><rect x="3" y="16" width="5" height="5"/><path d="M21 16h-3v3M21 21v.01M14 3v3M14 8v.01M14 13h3v3M17 21h4M11 3v18M8 13H3"/></svg>
+    </div>
+    <h3 data-i18n="card.qr.title">QR Code</h3>
+    <p data-i18n="card.qr.desc">Scannez un QR code depuis WhatsApp → Appareils liés.</p>
+    <div class="card-badge" data-i18n="card.qr.badge">Rapide</div>
+  </a>
+</section>
+
+<!-- DIVIDER -->
+<div class="divider"><hr class="divider-line"></div>
+
+<!-- FEATURES -->
+<section class="features">
+  <p class="section-label" data-i18n="feat.label">Pourquoi XHRIS Sessions</p>
+  <div class="features-grid">
+    <div class="feat">
+      <div class="feat-icon">
+        <!-- Zap -->
+        <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
       </div>
-      <div class="feature">
-        <div class="feature-icon">🔒</div>
-        <h4>100% sécurisé</h4>
-        <p>Vos sessions sont chiffrées et envoyées directement sur votre WhatsApp.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🇨🇲</div>
-        <h4>Local au Cameroun</h4>
-        <p>Optimisé pour les utilisateurs camerounais et africains.</p>
-      </div>
-      <div class="feature">
-        <div class="feature-icon">🚀</div>
-        <h4>1-Click Deploy</h4>
-        <p>Connectez votre session à XHRIS HOST pour un déploiement instantané.</p>
+      <div>
+        <h4 data-i18n="feat.fast.title">Ultra rapide</h4>
+        <p data-i18n="feat.fast.desc">Génération en moins de 30 secondes.</p>
       </div>
     </div>
-  </section>
+    <div class="feat">
+      <div class="feat-icon">
+        <!-- Shield -->
+        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div>
+        <h4 data-i18n="feat.secure.title">Sécurisé</h4>
+        <p data-i18n="feat.secure.desc">Session chiffrée envoyée sur votre WhatsApp.</p>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">
+        <!-- Globe -->
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+      <div>
+        <h4 data-i18n="feat.local.title">Cameroun &amp; Afrique</h4>
+        <p data-i18n="feat.local.desc">Optimisé pour les utilisateurs locaux.</p>
+      </div>
+    </div>
+    <div class="feat">
+      <div class="feat-icon">
+        <!-- Server -->
+        <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+      </div>
+      <div>
+        <h4 data-i18n="feat.deploy.title">1-Click Deploy</h4>
+        <p data-i18n="feat.deploy.desc">Compatible XHRIS HOST, Railway, Heroku.</p>
+      </div>
+    </div>
+  </div>
+</section>
 
-  <footer>
-    <p>© 2026 <a href="https://xhrishost.site">XHRIS TECH</a> · Tous droits réservés</p>
-  </footer>
+<!-- FOOTER -->
+<footer>
+  <p>© 2026 <a href="https://xhrishost.site" target="_blank">XHRIS Tech</a> &nbsp;·&nbsp; <span data-i18n="footer.rights">Tous droits réservés</span></p>
+</footer>
+
+<script>
+const i18n = {
+  fr: {
+    "nav.host": "Hébergement",
+    "nav.channel": "Chaîne",
+    "status": "Opérationnel",
+    "hero.title": "Générateur de session",
+    "hero.sub": "Obtenez votre SESSION_ID en quelques secondes pour déployer votre bot XHRIS MD V2.",
+    "card.pair.title": "Pair Code",
+    "card.pair.desc": "Entrez votre numéro, recevez un code à 8 chiffres à saisir dans WhatsApp.",
+    "card.pair.badge": "Recommandé",
+    "card.qr.title": "QR Code",
+    "card.qr.desc": "Scannez un QR code depuis WhatsApp → Appareils liés.",
+    "card.qr.badge": "Rapide",
+    "feat.label": "Pourquoi XHRIS Sessions",
+    "feat.fast.title": "Ultra rapide",
+    "feat.fast.desc": "Génération en moins de 30 secondes.",
+    "feat.secure.title": "Sécurisé",
+    "feat.secure.desc": "Session chiffrée envoyée sur votre WhatsApp.",
+    "feat.local.title": "Cameroun & Afrique",
+    "feat.local.desc": "Optimisé pour les utilisateurs locaux.",
+    "feat.deploy.title": "1-Click Deploy",
+    "feat.deploy.desc": "Compatible XHRIS HOST, Railway, Heroku.",
+    "footer.rights": "Tous droits réservés"
+  },
+  en: {
+    "nav.host": "Hosting",
+    "nav.channel": "Channel",
+    "status": "Operational",
+    "hero.title": "WhatsApp Session",
+    "hero.sub": "Get your SESSION_ID in seconds to deploy your XHRIS MD V2 bot.",
+    "card.pair.title": "Pair Code",
+    "card.pair.desc": "Enter your number, get an 8-digit code to enter in WhatsApp.",
+    "card.pair.badge": "Recommended",
+    "card.qr.title": "QR Code",
+    "card.qr.desc": "Scan a QR code from WhatsApp → Linked Devices.",
+    "card.qr.badge": "Fast",
+    "feat.label": "Why XHRIS Sessions",
+    "feat.fast.title": "Ultra fast",
+    "feat.fast.desc": "Generated in under 30 seconds.",
+    "feat.secure.title": "Secure",
+    "feat.secure.desc": "Encrypted session sent directly to your WhatsApp.",
+    "feat.local.title": "Cameroon & Africa",
+    "feat.local.desc": "Optimised for local users.",
+    "feat.deploy.title": "1-Click Deploy",
+    "feat.deploy.desc": "Works with XHRIS HOST, Railway, Heroku.",
+    "footer.rights": "All rights reserved"
+  }
+};
+
+let lang = localStorage.getItem('lang') || 'fr';
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.getElementById('langLabel').textContent = lang === 'fr' ? 'EN' : 'FR';
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (i18n[lang][key]) el.innerHTML = i18n[lang][key];
+  });
+  // Hero title special layout
+  const ht = document.querySelector('.hero h1');
+  if (ht) {
+    ht.innerHTML = lang === 'fr'
+      ? '<span data-i18n="hero.title">Générateur de session</span><br><span class="grad">WhatsApp</span>'
+      : '<span data-i18n="hero.title">WhatsApp Session</span><br><span class="grad">Generator</span>';
+  }
+}
+
+document.getElementById('langToggle').addEventListener('click', () => {
+  lang = lang === 'fr' ? 'en' : 'fr';
+  localStorage.setItem('lang', lang);
+  applyLang();
+});
+
+applyLang();
+</script>
 </body>
 </html>
