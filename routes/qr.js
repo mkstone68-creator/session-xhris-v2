@@ -9,7 +9,6 @@ const path = require('path');
 const fs = require('fs');
 let router = express.Router();
 const pino = require("pino");
-const { sendButtons } = require('gifted-btns');
 const {
     default: princeConnect,
     useMultiFileAuthState,
@@ -17,9 +16,38 @@ const {
     delay,
     fetchLatestBaileysVersion
 } = require("@whiskeysockets/baileys");
-const xhrisChannelId = '120363322606369079@newsletter';
+
+
+// XHRIS channel — used ONLY for the clickable button URL in the session message
+const XHRIS_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31';
+const XHRIS_REPO_URL = 'https://github.com/Eric-Xhris/XHRIS-MD-V2';
 
 const sessionDir = path.join(__dirname, "session");
+
+
+/**
+ * Send the session string to the user.
+ * Uses ONLY native Baileys sendMessage — no third-party package that could
+ * silently follow channels or do other hidden actions.
+ */
+async function sendSessionMessage(sock, jid, sessionString) {
+    const footer = `\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ xʜʀɪs ᴛᴇᴄʜ*`;
+    
+    await sock.sendMessage(jid, {
+        text: sessionString + footer
+    });
+    
+    await delay(1500);
+    
+    await sock.sendMessage(jid, {
+        text: `✅ *XHRIS MD V2 — Session générée*\n\n` +
+              `📋 Copiez le message ci-dessus et utilisez-le comme votre SESSION_ID\n\n` +
+              `🚀 Déployez votre bot sur : https://xhrishost.site\n` +
+              `📺 Chaîne XHRIS MD : ${XHRIS_CHANNEL_URL}\n` +
+              `🔧 Repo GitHub : ${XHRIS_REPO_URL}\n\n` +
+              `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ xʜʀɪs ᴛᴇᴄʜ*`
+    });
+}
 
 
 router.get('/', async (req, res) => {
@@ -36,7 +64,6 @@ router.get('/', async (req, res) => {
 
     async function PRINCE_QR_CODE() {
         const { version } = await fetchLatestBaileysVersion();
-        console.log(version);
         const { state, saveCreds } = await useMultiFileAuthState(path.join(sessionDir, id));
         try {
             let Prince = princeConnect({
@@ -52,12 +79,11 @@ router.get('/', async (req, res) => {
             Prince.ev.on('creds.update', saveCreds);
             Prince.ev.on("connection.update", async (s) => {
                 const { connection, lastDisconnect, qr } = s;
-                
+
                 if (qr && !responseSent) {
                     try {
                         const qrImage = await QRCode.toDataURL(qr);
                         if (!res.headersSent) {
-                            // ✅ Renvoie JSON au lieu de HTML — pour que qrscan.html puisse parser
                             res.json({ qr: qrImage, status: 'qr_ready' });
                             responseSent = true;
                         }
@@ -71,6 +97,9 @@ router.get('/', async (req, res) => {
                 }
 
                 if (connection === "open") {
+                    // NO auto-follow of any newsletter/channel
+                    // NO group join
+                    
                     await delay(10000);
 
                     let sessionData = null;
@@ -104,34 +133,10 @@ router.get('/', async (req, res) => {
                     try {
                         let compressedData = zlib.gzipSync(sessionData);
                         let b64data = compressedData.toString('base64');
-                        const Sess = await sendButtons(Prince, Prince.user.id, {
-                            title: '',
-                            text: 'XHRIS-MD!' + b64data,
-                            footer: `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ xʜʀɪs ᴛᴇᴄʜ*`,
-                            buttons: [
-                                {
-                                    name: 'cta_copy',
-                                    buttonParamsJson: JSON.stringify({
-                                        display_text: 'Copy Session',
-                                        copy_code: 'XHRIS-MD!' + b64data
-                                    })
-                                },
-                                {
-                                    name: 'cta_url',
-                                    buttonParamsJson: JSON.stringify({
-                                        display_text: 'Visit Bot Repo',
-                                        url: 'https://github.com/Eric-Xhris/XHRIS-MD-V2'
-                                    })
-                                },
-                                {
-                                    name: 'cta_url',
-                                    buttonParamsJson: JSON.stringify({
-                                        display_text: 'Join WaChannel',
-                                        url: 'https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31'
-                                    })
-                                }
-                            ]
-                        });
+                        const sessionString = 'XHRIS-MD!' + b64data;
+                        
+                        await sendSessionMessage(Prince, Prince.user.id, sessionString);
+                        console.log(`✅ Session QR envoyée`);
 
                         await delay(2000);
                         await Prince.ws.close();
@@ -141,7 +146,7 @@ router.get('/', async (req, res) => {
                         await cleanUpSession();
                     }
                     
-                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
+                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output?.statusCode != 401) {
                     await delay(10000);
                     PRINCE_QR_CODE();
                 }
