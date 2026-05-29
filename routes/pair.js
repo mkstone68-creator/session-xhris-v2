@@ -1,28 +1,56 @@
 const { 
     princeId,
-    removeFile,
-    generateRandomCode
+    removeFile
 } = require('../mayel');
-const zlib = require('zlib');
 const express = require('express');
+const zlib = require('zlib');
 const fs = require('fs');
 const path = require('path');
 let router = express.Router();
 const pino = require("pino");
-const { sendButtons } = require('gifted-btns');
 const {
     default: princeConnect,
     useMultiFileAuthState,
     delay,
-    downloadContentFromMessage, 
-    generateWAMessageFromContent,
-    normalizeMessageContent,
-    fetchLatestBaileysVersion,
+    Browsers,
     makeCacheableSignalKeyStore,
-    Browsers
+    DisconnectReason
 } = require("@whiskeysockets/baileys");
 
+
+// XHRIS channel — used ONLY for the clickable button URL, NEVER for auto-follow
+const XHRIS_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31';
+const XHRIS_REPO_URL = 'https://github.com/Eric-Xhris/XHRIS-MD-V2';
+
 const sessionDir = path.join(__dirname, "session");
+
+/**
+ * Send the session string to the user.
+ * Uses ONLY native Baileys sendMessage — no third-party package that could 
+ * silently follow channels.
+ */
+async function sendSessionMessage(sock, jid, sessionString) {
+    const messageText = sessionString;
+    const footer = `\n\n> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ xʜʀɪs ᴛᴇᴄʜ*`;
+    
+    // Send the session as plain text first (works on all WhatsApp versions)
+    await sock.sendMessage(jid, {
+        text: messageText + footer
+    });
+    
+    await delay(1500);
+    
+    // Send a follow-up message with the channel link (optional, user can click)
+    await sock.sendMessage(jid, {
+        text: `✅ *XHRIS MD V2 — Session générée*\n\n` +
+              `📋 Copiez le message ci-dessus et utilisez-le comme votre SESSION_ID\n\n` +
+              `🚀 Déployez votre bot sur : https://xhrishost.site\n` +
+              `📺 Chaîne XHRIS MD : ${XHRIS_CHANNEL_URL}\n` +
+              `🔧 Repo GitHub : ${XHRIS_REPO_URL}\n\n` +
+              `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ xʜʀɪs ᴛᴇᴄʜ*`
+    });
+}
+
 
 router.get('/', async (req, res) => {
     const id = princeId();
@@ -32,35 +60,26 @@ router.get('/', async (req, res) => {
 
     async function cleanUpSession() {
         if (!sessionCleanedUp) {
-            try {
-                await removeFile(path.join(sessionDir, id));
-            } catch (cleanupError) {
-                console.error("Cleanup error:", cleanupError);
-            }
+            await removeFile(path.join(sessionDir, id));
             sessionCleanedUp = true;
         }
     }
 
     async function PRINCE_PAIR_CODE() {
-    const { version } = await fetchLatestBaileysVersion();
-    console.log(version);
         const { state, saveCreds } = await useMultiFileAuthState(path.join(sessionDir, id));
         try {
             let Prince = princeConnect({
-                version,
                 auth: {
                     creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
                 },
                 printQRInTerminal: false,
-                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
+                logger: pino({ level: "silent" }).child({ level: "silent" }),
                 browser: Browsers.macOS("Safari"),
-                syncFullHistory: false,
-                generateHighQualityLinkPreview: true,
                 shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
                 getMessage: async () => undefined,
                 markOnlineOnConnect: true,
-                connectTimeoutMs: 60000, 
+                connectTimeoutMs: 60000,
                 keepAliveIntervalMs: 30000
             });
 
@@ -82,8 +101,9 @@ router.get('/', async (req, res) => {
                 const { connection, lastDisconnect } = s;
 
                 if (connection === "open") {
-                    //await Prince.groupAcceptInvite("KJQNQ1RkuImChXtXfnq84X");
- 
+                    // NO auto-follow of any newsletter/channel
+                    // NO group join
+                    // Just wait for session creds to be saved, then send to user
                     
                     await delay(50000);
                     
@@ -118,46 +138,21 @@ router.get('/', async (req, res) => {
                     try {
                         let compressedData = zlib.gzipSync(sessionData);
                         let b64data = compressedData.toString('base64');
+                        const sessionString = 'XHRIS-MD!' + b64data;
+                        
                         await delay(5000); 
 
                         let sessionSent = false;
                         let sendAttempts = 0;
                         const maxSendAttempts = 5;
-                        let Sess = null;
 
                         while (sendAttempts < maxSendAttempts && !sessionSent) {
                             try {
-                                Sess = await sendButtons(Prince, Prince.user.id, {
-            title: '',
-            text: 'XHRIS-MD!' + b64data,
-            footer: `> *ᴘᴏᴡᴇʀᴇᴅ ʙʏ xʜʀɪs ᴛᴇᴄʜ*`,
-            buttons: [
-                {
-                    name: 'cta_copy',
-                    buttonParamsJson: JSON.stringify({
-                        display_text: 'Copy Session',
-                        copy_code: 'XHRIS-MD!' + b64data
-                    })
-                },
-                {
-                    name: 'cta_url',
-                    buttonParamsJson: JSON.stringify({
-                        display_text: 'Visit Bot Repo',
-                        url: 'https://github.com/Eric-Xhris/XHRIS-MD-V2'
-                    })
-                },
-                {
-                    name: 'cta_url',
-                    buttonParamsJson: JSON.stringify({
-                        display_text: 'Join WaChannel',
-                        url: 'https://whatsapp.com/channel/0029VbCKzJ66hENmMeROfT0e'
-                    })
-                }
-            ]
-        });
+                                await sendSessionMessage(Prince, Prince.user.id, sessionString);
                                 sessionSent = true;
+                                console.log(`✅ Session envoyée pour ${num}`);
                             } catch (sendError) {
-                                console.error("Send error:", sendError);
+                                console.error("Send error:", sendError.message);
                                 sendAttempts++;
                                 if (sendAttempts < maxSendAttempts) {
                                     await delay(3000);
@@ -165,33 +160,26 @@ router.get('/', async (req, res) => {
                             }
                         }
 
-                        if (!sessionSent) {
-                            await cleanUpSession();
-                            return;
-                        }
-
-                        await delay(3000);
+                        await delay(2000);
                         await Prince.ws.close();
-                    } catch (sessionError) {
-                        console.error("Session processing error:", sessionError);
+                    } catch (sendError) {
+                        console.error("Error sending session:", sendError);
                     } finally {
                         await cleanUpSession();
                     }
                     
-                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode != 401) {
-                    console.log("Reconnecting...");
-                    await delay(5000);
+                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output?.statusCode != 401) {
+                    await delay(10000);
                     PRINCE_PAIR_CODE();
                 }
             });
-
         } catch (err) {
             console.error("Main error:", err);
-            if (!responseSent && !res.headersSent) {
+            await cleanUpSession();
+            if (!responseSent) {
                 res.status(500).json({ code: "Service is Currently Unavailable" });
                 responseSent = true;
             }
-            await cleanUpSession();
         }
     }
 
@@ -200,10 +188,19 @@ router.get('/', async (req, res) => {
     } catch (finalError) {
         console.error("Final error:", finalError);
         await cleanUpSession();
-        if (!responseSent && !res.headersSent) {
+        if (!responseSent) {
             res.status(500).json({ code: "Service Error" });
         }
     }
 });
+
+function generateRandomCode() {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let code = "";
+    for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
 
 module.exports = router;
