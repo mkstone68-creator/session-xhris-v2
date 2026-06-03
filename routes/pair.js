@@ -113,8 +113,11 @@ router.get('/', async (req, res) => {
             codeRequested = true;
             try {
                 console.log(`📲 Demande du pairing code pour ${num}...`);
-                // code de pairing personnalisé "XHRISBOT" (8 chars A-Z/0-9 → affiché XHRI-SBOT)
-                const code = await Prince.requestPairingCode(num, "XHRISBOT");
+                // Code de pairing personnalisé "XHR1SMD2" (affiché groupé : XHR1-SMD2).
+                // IMPORTANT : uniquement des caractères de l'alphabet Crockford Base32
+                // (pas de I, O, U, L ni 0) — sinon WhatsApp rejette le code en SILENCE
+                // et n'envoie aucune notification. "XHRIS" contient un I interdit, d'où XHR1S.
+                const code = await Prince.requestPairingCode(num, "XHR1SMD2");
                 if (dead) return;
                 console.log(`✅ Code généré pour ${num}: ${code}`);
                 sendOnce(200, { code });
