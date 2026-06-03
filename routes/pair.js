@@ -46,6 +46,7 @@ router.get('/', async (req, res) => {
     let responseSent   = false;
     let sessionCleaned = false;
     let dead = false;
+    let pairingRequested = false;
 
     async function cleanUp() {
         if (!sessionCleaned) {
@@ -78,7 +79,8 @@ router.get('/', async (req, res) => {
             },
             printQRInTerminal: false,
             logger: pino({ level: "silent" }).child({ level: "silent" }),
-            browser: Browsers.ubuntu("Chrome"),
+            // macOS Safari est moins suspect que Ubuntu Chrome pour WhatsApp
+            browser: Browsers.macOS("Safari"),
             shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
             getMessage: async () => undefined,
             markOnlineOnConnect: false,
@@ -89,35 +91,48 @@ router.get('/', async (req, res) => {
 
         Prince.ev.on('creds.update', saveCreds);
 
-        let pairingRequested = false;
+        // ── FIX PRINCIPAL : écouter l'event 'open' de la WebSocket ──────────
+        // "connection === connecting" arrive trop tôt (TCP connecté mais
+        // handshake Noise Protocol pas encore terminé). On attend que la
+        // socket WebSocket soit vraiment ouverte avant de demander le code.
+        Prince.ws.on('open', async () => {
+            if (dead || pairingRequested) return;
+            pairingRequested = true;
+
+            // Délai de 1.5s pour laisser le handshake Noise/WhatsApp se finir
+            // après l'ouverture TCP — sans ça, requestPairingCode arrive
+            // avant que le serveur WhatsApp soit prêt → 405
+            await delay(1500);
+
+            if (dead) return;
+
+            try {
+                const code = await Prince.requestPairingCode(num);
+                console.log(`✅ Code généré pour ${num}: ${code}`);
+                sendOnce(200, { code });
+            } catch (err) {
+                console.error("requestPairingCode error:", err?.message || err);
+                if (!dead) {
+                    dead = true;
+                    clearTimeout(globalTimeout);
+                    try { Prince.ws.close(); } catch (_) {}
+                    await cleanUp();
+                    sendOnce(500, { code: "Impossible de générer le code — réessayez" });
+                }
+            }
+        });
 
         Prince.ev.on("connection.update", async (s) => {
             if (dead) return;
             const { connection, lastDisconnect, qr } = s;
 
-            // ── Demander le code dès la première émission de "connecting" ────
-            if (connection === "connecting" && !pairingRequested) {
-                pairingRequested = true;
-
-                setTimeout(async () => {
-                    if (dead) return;
-                    try {
-                        const code = await Prince.requestPairingCode(num);
-                        console.log(`✅ Code généré pour ${num}: ${code}`);
-                        sendOnce(200, { code });
-                    } catch (err) {
-                        console.error("requestPairingCode error:", err?.message || err);
-                    }
-                }, 3000);
-
-                return;
-            }
-
             // ── QR reçu : requestPairingCode n'a pas marché ─────────────────
             if (qr) {
                 console.error("QR reçu au lieu du pairing code — abandon");
                 dead = true;
+                clearTimeout(globalTimeout);
                 try { Prince.ws.close(); } catch (_) {}
+                await cleanUp();
                 sendOnce(503, { code: "Erreur pairing — réessayez" });
                 return;
             }
