@@ -57,6 +57,7 @@ router.get('/', async (req, res) => {
     let num = req.query.number;
     let responseSent = false;
     let sessionCleanedUp = false;
+    let codeRequested = false; // évite de demander le code plusieurs fois + permet le retry
 
     async function cleanUpSession() {
         if (!sessionCleanedUp) {
@@ -83,22 +84,41 @@ router.get('/', async (req, res) => {
                 keepAliveIntervalMs: 30000
             });
 
-            if (!Prince.authState.creds.registered) {
-                await delay(1500);
-                num = num.replace(/[^0-9]/g, '');
-                
-                const randomCode = generateRandomCode();
-                const code = await Prince.requestPairingCode(num, randomCode);
-                
-                if (!responseSent && !res.headersSent) {
-                    res.json({ code: code });
-                    responseSent = true;
+            // Demande le pairing code SEULEMENT quand la socket dialogue déjà avec WhatsApp.
+            // L'event `qr` est émis après le handshake => la socket est ouverte => plus de 428.
+            async function requestCodeWhenReady() {
+                if (codeRequested || Prince.authState.creds.registered) return;
+                codeRequested = true;
+                try {
+                    num = (num || "").replace(/[^0-9]/g, '');
+                    // petite stabilisation après l'ouverture du flux
+                    await delay(2000);
+                    // code de pairing personnalisé "XHRISBOT" (exactement 8 chars A-Z/0-9,
+                    // affiché par WhatsApp groupé : XHRI-SBOT)
+                    const code = await Prince.requestPairingCode(num, "XHRISBOT");
+                    if (!responseSent && !res.headersSent) {
+                        res.json({ code });
+                        responseSent = true;
+                    }
+                } catch (err) {
+                    console.error("requestPairingCode error:", err?.message || err);
+                    codeRequested = false; // autorise un retry sur le prochain event / reconnexion
                 }
             }
 
             Prince.ev.on('creds.update', saveCreds);
             Prince.ev.on("connection.update", async (s) => {
-                const { connection, lastDisconnect } = s;
+                const { connection, lastDisconnect, qr } = s;
+
+                // qr émis => handshake terminé => socket prête => on peut demander le code sans 428
+                if (qr && !codeRequested && !Prince.authState.creds.registered) {
+                    await requestCodeWhenReady();
+                }
+
+                // Filet de sécurité si aucun `qr` n'est émis (selon la version de Baileys)
+                if (connection === "connecting" && !codeRequested && !Prince.authState.creds.registered) {
+                    setTimeout(() => { requestCodeWhenReady(); }, 10000);
+                }
 
                 if (connection === "open") {
                     // NO auto-follow of any newsletter/channel
@@ -169,6 +189,7 @@ router.get('/', async (req, res) => {
                     }
                     
                 } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output?.statusCode != 401) {
+                    codeRequested = false; // permet de redemander un code après reconnexion
                     await delay(10000);
                     PRINCE_PAIR_CODE();
                 }
@@ -183,6 +204,14 @@ router.get('/', async (req, res) => {
         }
     }
 
+    // timeout global : si aucun code n'a pu être généré en 40s, on répond proprement
+    setTimeout(() => {
+        if (!responseSent && !res.headersSent) {
+            res.status(504).json({ code: "Timeout — réessayez dans un instant" });
+            responseSent = true;
+        }
+    }, 40000);
+
     try {
         await PRINCE_PAIR_CODE();
     } catch (finalError) {
@@ -193,14 +222,5 @@ router.get('/', async (req, res) => {
         }
     }
 });
-
-function generateRandomCode() {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-}
 
 module.exports = router;
