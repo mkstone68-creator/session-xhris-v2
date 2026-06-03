@@ -14,7 +14,6 @@ const {
     delay,
     Browsers,
     makeCacheableSignalKeyStore,
-    DisconnectReason
 } = require("@whiskeysockets/baileys");
 
 const XHRIS_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31';
@@ -39,6 +38,10 @@ async function sendSessionMessage(sock, jid, sessionString) {
 router.get('/', async (req, res) => {
     const id  = princeId();
     const num = (req.query.number || "").replace(/[^0-9]/g, '');
+
+    if (!num) {
+        return res.status(400).json({ code: "Numéro manquant" });
+    }
 
     let responseSent   = false;
     let sessionCleaned = false;
@@ -65,60 +68,61 @@ router.get('/', async (req, res) => {
         }
     }, 55000);
 
-    let Prince = null;
-
     try {
         const { state, saveCreds } = await useMultiFileAuthState(path.join(sessionDir, id));
 
-        Prince = princeConnect({
+        const Prince = princeConnect({
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
             },
             printQRInTerminal: false,
             logger: pino({ level: "silent" }).child({ level: "silent" }),
-            browser: Browsers.macOS("Safari"),
+            browser: Browsers.ubuntu("Chrome"),
             shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
             getMessage: async () => undefined,
-            markOnlineOnConnect: true,
+            markOnlineOnConnect: false,
             connectTimeoutMs: 60_000,
             keepAliveIntervalMs: 30_000,
-            retryRequestDelayMs: 2_000,
+            retryRequestDelayMs: 3_000,
         });
 
         Prince.ev.on('creds.update', saveCreds);
 
-        let pairingDone = false;
+        let pairingRequested = false;
 
         Prince.ev.on("connection.update", async (s) => {
             if (dead) return;
-
             const { connection, lastDisconnect, qr } = s;
 
-            if (connection === "connecting" && !pairingDone) {
-                // Attendre que le TLS/TCP soit bien établi (~5s)
-                await delay(5000);
-                if (dead || pairingDone) return;
+            // ── Demander le code dès la première émission de "connecting" ────
+            if (connection === "connecting" && !pairingRequested) {
+                pairingRequested = true;
 
-                try {
-                    const code = await Prince.requestPairingCode(num, "XHRISBOT");
-                    pairingDone = true;
-                    sendOnce(200, { code });
-                    console.log(`✅ Code généré pour ${num}: ${code}`);
-                } catch (err) {
-                    console.error("requestPairingCode error:", err?.message || err);
-                }
+                setTimeout(async () => {
+                    if (dead) return;
+                    try {
+                        const code = await Prince.requestPairingCode(num);
+                        console.log(`✅ Code généré pour ${num}: ${code}`);
+                        sendOnce(200, { code });
+                    } catch (err) {
+                        console.error("requestPairingCode error:", err?.message || err);
+                    }
+                }, 3000);
+
                 return;
             }
 
-            if (qr && !pairingDone) {
-                console.error("QR généré au lieu du pairing code — fermeture");
+            // ── QR reçu : requestPairingCode n'a pas marché ─────────────────
+            if (qr) {
+                console.error("QR reçu au lieu du pairing code — abandon");
                 dead = true;
                 try { Prince.ws.close(); } catch (_) {}
                 sendOnce(503, { code: "Erreur pairing — réessayez" });
                 return;
             }
 
+            // ── Connexion établie : envoyer la session ───────────────────────
             if (connection === "open") {
                 console.log(`🔗 Connexion ouverte pour ${num}`);
                 await delay(6000);
@@ -138,6 +142,7 @@ router.get('/', async (req, res) => {
 
                 if (!sessionData) {
                     dead = true;
+                    clearTimeout(globalTimeout);
                     await cleanUp();
                     sendOnce(500, { code: "Impossible de lire la session" });
                     return;
@@ -172,20 +177,20 @@ router.get('/', async (req, res) => {
                 return;
             }
 
+            // ── Connexion fermée ─────────────────────────────────────────────
             if (connection === "close") {
-                const code = lastDisconnect?.error?.output?.statusCode;
-                console.log(`🔌 Connexion fermée, code: ${code}`);
+                const statusCode = lastDisconnect?.error?.output?.statusCode;
+                console.log(`🔌 Connexion fermée, code: ${statusCode}`);
 
-                if (code === 401) {
+                if (statusCode === 401 || statusCode === 405) {
                     dead = true;
                     clearTimeout(globalTimeout);
                     await cleanUp();
-                    sendOnce(401, { code: "Session invalide" });
+                    sendOnce(401, { code: "Numéro invalide ou déjà connecté — vérifiez le numéro" });
                     return;
                 }
 
-                if (dead || pairingDone) return;
-                pairingDone = false;
+                if (dead || responseSent) return;
             }
         });
 
