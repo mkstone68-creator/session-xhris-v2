@@ -42,8 +42,7 @@ router.get('/', async (req, res) => {
 
     let responseSent   = false;
     let sessionCleaned = false;
-    // ── clé de contrôle GLOBALE à toute la requête ──────────────────────────
-    let dead = false;  // mis à true dès qu'on ne veut plus rien faire
+    let dead = false;
 
     async function cleanUp() {
         if (!sessionCleaned) {
@@ -59,7 +58,6 @@ router.get('/', async (req, res) => {
         }
     }
 
-    // Timeout global 55s
     const globalTimeout = setTimeout(() => {
         if (!dead) {
             dead = true;
@@ -67,9 +65,6 @@ router.get('/', async (req, res) => {
         }
     }, 55000);
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Une seule instance Baileys par requête HTTP — pas de récursion
-    // ─────────────────────────────────────────────────────────────────────────
     let Prince = null;
 
     try {
@@ -93,7 +88,6 @@ router.get('/', async (req, res) => {
 
         Prince.ev.on('creds.update', saveCreds);
 
-        // ── état interne du pairing ──────────────────────────────────────────
         let pairingDone = false;
 
         Prince.ev.on("connection.update", async (s) => {
@@ -101,14 +95,9 @@ router.get('/', async (req, res) => {
 
             const { connection, lastDisconnect, qr } = s;
 
-            // ── CONNECTING : demander le pairing code ────────────────────────
-            // On le fait ici, avant que Baileys ne bascule vers le QR-flow.
-            // Pas de retry loop infini — on laisse Baileys se reconnecter 
-            // naturellement si ça échoue ; le guard `pairingDone` évite
-            // les demandes multiples.
             if (connection === "connecting" && !pairingDone) {
-                // attendre que le TLS/TCP soit établi (~3s)
-                await delay(3000);
+                // Attendre que le TLS/TCP soit bien établi (~5s)
+                await delay(5000);
                 if (dead || pairingDone) return;
 
                 try {
@@ -117,18 +106,12 @@ router.get('/', async (req, res) => {
                     sendOnce(200, { code });
                     console.log(`✅ Code généré pour ${num}: ${code}`);
                 } catch (err) {
-                    // Pas grave : Baileys va se reconnecter et réémettre "connecting"
                     console.error("requestPairingCode error:", err?.message || err);
-                    // On NE remet PAS pairingDone à false ici —
-                    // ça sera fait dans "close" si besoin
                 }
                 return;
             }
 
-            // ── QR : on ne veut pas du QR-flow, ignorer ─────────────────────
             if (qr && !pairingDone) {
-                // Baileys a généré un QR, ça signifie que requestPairingCode
-                // n'a pas été appelé à temps. Fermer et laisser le timeout répondre.
                 console.error("QR généré au lieu du pairing code — fermeture");
                 dead = true;
                 try { Prince.ws.close(); } catch (_) {}
@@ -136,10 +119,8 @@ router.get('/', async (req, res) => {
                 return;
             }
 
-            // ── OPEN : connexion établie → envoyer la session ────────────────
             if (connection === "open") {
                 console.log(`🔗 Connexion ouverte pour ${num}`);
-                // Laisser saveCreds écrire le fichier
                 await delay(6000);
                 if (dead) return;
 
@@ -191,13 +172,11 @@ router.get('/', async (req, res) => {
                 return;
             }
 
-            // ── CLOSE ────────────────────────────────────────────────────────
             if (connection === "close") {
                 const code = lastDisconnect?.error?.output?.statusCode;
                 console.log(`🔌 Connexion fermée, code: ${code}`);
 
                 if (code === 401) {
-                    // Session invalide — arrêt définitif
                     dead = true;
                     clearTimeout(globalTimeout);
                     await cleanUp();
@@ -206,9 +185,6 @@ router.get('/', async (req, res) => {
                 }
 
                 if (dead || pairingDone) return;
-
-                // Reconnexion automatique gérée par Baileys (retryRequestDelayMs)
-                // On reset pairingDone pour pouvoir redemander le code
                 pairingDone = false;
             }
         });
@@ -221,3 +197,5 @@ router.get('/', async (req, res) => {
         sendOnce(500, { code: "Service is Currently Unavailable" });
     }
 });
+
+module.exports = router;
