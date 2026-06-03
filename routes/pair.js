@@ -46,7 +46,6 @@ router.get('/', async (req, res) => {
     let responseSent   = false;
     let sessionCleaned = false;
     let dead = false;
-    let pairingRequested = false;
 
     async function cleanUp() {
         if (!sessionCleaned) {
@@ -78,8 +77,6 @@ router.get('/', async (req, res) => {
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
             },
             printQRInTerminal: false,
-            // IMPORTANT : on désactive le QR complètement pour forcer le pairing code
-            // Baileys n'émettra pas l'event 'qr' si cette option est absente du flow
             logger: pino({ level: "silent" }).child({ level: "silent" }),
             browser: Browsers.ubuntu("Chrome"),
             shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
@@ -92,51 +89,47 @@ router.get('/', async (req, res) => {
 
         Prince.ev.on('creds.update', saveCreds);
 
+        // ── Demande du pairing code IMMÉDIATEMENT après création du socket ──
+        // C'est la seule façon fiable : Baileys doit recevoir requestPairingCode
+        // AVANT que le handshake Noise Protocol ne soit finalisé, sinon il
+        // génère un QR à la place. On ne peut pas attendre un event.
+        (async () => {
+            // Petite pause pour que Baileys initialise le WebSocket
+            await delay(1500);
+            if (dead) return;
+            try {
+                console.log(`📲 Demande du pairing code pour ${num}...`);
+                const code = await Prince.requestPairingCode(num);
+                if (dead) return;
+                console.log(`✅ Code généré pour ${num}: ${code}`);
+                sendOnce(200, { code });
+            } catch (err) {
+                if (dead) return;
+                console.error("requestPairingCode error:", err?.message || err);
+                dead = true;
+                clearTimeout(globalTimeout);
+                try { Prince.ws?.close(); } catch (_) {}
+                await cleanUp();
+                sendOnce(503, {
+                    code: "Ce numéro ne supporte pas le pairing code — vérifiez que WhatsApp est actif sur ce numéro"
+                });
+            }
+        })();
+
         Prince.ev.on("connection.update", async (s) => {
             if (dead) return;
             const { connection, lastDisconnect, qr } = s;
 
-            // ── Premier event "connecting" reçu ─────────────────────────────
-            // On attend 8 secondes fixes : c'est le temps nécessaire pour que
-            // Baileys finisse le handshake Noise Protocol avec WhatsApp sur
-            // une infra cloud (Railway, Heroku, etc.). Moins que ça = QR émis.
-            // requestPairingCode doit arriver APRES que WhatsApp a envoyé le
-            // challenge et reçu la réponse — pas juste après TCP connect.
-            if (connection === "connecting" && !pairingRequested) {
-                pairingRequested = true;
-                console.log(`⏳ Attente handshake WS pour ${num}...`);
-
-                setTimeout(async () => {
-                    if (dead) return;
-                    try {
-                        const code = await Prince.requestPairingCode(num);
-                        if (dead) return;
-                        console.log(`✅ Code généré pour ${num}: ${code}`);
-                        sendOnce(200, { code });
-                    } catch (err) {
-                        if (dead) return;
-                        console.error("requestPairingCode error:", err?.message || err);
-                        dead = true;
-                        clearTimeout(globalTimeout);
-                        try { Prince.ws?.close(); } catch (_) {}
-                        await cleanUp();
-                        sendOnce(500, { code: "Impossible de générer le code — réessayez" });
-                    }
-                }, 8000);
-
-                return;
-            }
-
-            // ── QR reçu malgré tout ──────────────────────────────────────────
-            // Si on arrive ici c'est que requestPairingCode est arrivé trop tard
-            // OU que le numéro n'est pas éligible au pairing code WhatsApp.
+            // Si malgré tout un QR arrive (numéro inéligible), on arrête
             if (qr && !responseSent) {
                 console.error("QR reçu — pairing code non supporté pour ce numéro");
                 dead = true;
                 clearTimeout(globalTimeout);
                 try { Prince.ws?.close(); } catch (_) {}
                 await cleanUp();
-                sendOnce(503, { code: "Ce numéro ne supporte pas le pairing code — vérifiez que WhatsApp est actif sur ce numéro" });
+                sendOnce(503, {
+                    code: "Ce numéro ne supporte pas le pairing code — vérifiez que WhatsApp est actif sur ce numéro"
+                });
                 return;
             }
 
