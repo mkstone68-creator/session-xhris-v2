@@ -69,6 +69,8 @@ router.get('/', async (req, res) => {
     let sessionCleaned = false;
     let dead           = false;
     let codeRequested  = false;
+    let restartCount   = 0;
+    const MAX_RESTARTS = 2;
 
     async function cleanUp() {
         if (!sessionCleaned) {
@@ -223,19 +225,50 @@ router.get('/', async (req, res) => {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                 console.log(`[PAIR] Connexion fermée, code: ${statusCode}`);
 
+                // 515 = restart required APRÈS pairing réussi → reconnexion pour finaliser
                 if (statusCode === 515) {
                     console.log("[PAIR] 515 restart required — reconnexion...");
                     if (!dead) setTimeout(() => { reconnectAfterPair(); }, 2000);
                     return;
                 }
+
+                // 401 = compte déconnecté/suspendu → NE PAS réessayer (boucle infinie sinon)
                 if (statusCode === 401) {
-                    if (!dead) { dead = true; clearTimeout(globalTimeout); await cleanUp(); }
+                    console.log("[PAIR] 401 loggedOut — ce numéro est déconnecté ou suspendu. Arrêt.");
+                    if (!dead) {
+                        dead = true;
+                        clearTimeout(globalTimeout);
+                        await cleanUp();
+                        sendOnce(401, { code: "Ce numéro est déconnecté ou suspendu sur WhatsApp. Utilisez un numéro actif." });
+                    }
                     return;
                 }
-                // Si la connexion se ferme AVANT d'avoir le code et qu'on peut réessayer
+
+                // 405 = pairing refusé → NE PAS boucler à l'infini
+                if (statusCode === 405) {
+                    console.log("[PAIR] 405 — pairing refusé par WhatsApp.");
+                    if (!dead) {
+                        dead = true;
+                        clearTimeout(globalTimeout);
+                        await cleanUp();
+                        sendOnce(405, { code: "Pairing refusé par WhatsApp. Réessayez ou utilisez le QR." });
+                    }
+                    return;
+                }
+
+                // Fermeture avant le code : relance LIMITÉE (pas de boucle infinie)
                 if (!codeRequested && !responseSent && !dead) {
-                    console.log("[PAIR] Fermeture avant code — relance de la connexion...");
-                    setTimeout(() => { startPairing().catch(e => console.error(e.message)); }, 3000);
+                    if (restartCount < MAX_RESTARTS) {
+                        restartCount++;
+                        console.log(`[PAIR] Fermeture avant code — relance ${restartCount}/${MAX_RESTARTS}...`);
+                        setTimeout(() => { startPairing().catch(e => console.error(e.message)); }, 3000);
+                    } else {
+                        console.log("[PAIR] Trop de tentatives — abandon.");
+                        dead = true;
+                        clearTimeout(globalTimeout);
+                        await cleanUp();
+                        sendOnce(503, { code: "Connexion instable — réessayez dans un instant." });
+                    }
                 }
             }
         });
