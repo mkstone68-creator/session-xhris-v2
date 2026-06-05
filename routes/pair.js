@@ -87,7 +87,13 @@ router.get('/', async (req, res) => {
             }
             codeRequested = true;
             console.log(`[PAIR] Demande du code pour ${num} (tentative ${attempt})...`);
-            let code = await Prince.requestPairingCode(num, "XHR1SMD2");
+            // Code custom configurable via variable d'env PAIR_CUSTOM_CODE.
+            // Si vide ou absent → Baileys génère un code valide lui-même.
+            // (alphabet Crockford : pas de 0/I/O/U si tu mets un code custom)
+            const customCode = process.env.PAIR_CUSTOM_CODE || "";
+            let code = customCode
+                ? await Prince.requestPairingCode(num, customCode)
+                : await Prince.requestPairingCode(num);
             code = code?.match(/.{1,4}/g)?.join('-') || code;
             console.log(`[PAIR] ✅ Code généré pour ${num}: ${code}`);
             sendOnce(200, { code });
