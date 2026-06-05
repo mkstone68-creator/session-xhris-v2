@@ -18,12 +18,6 @@ const {
 
 const XHRIS_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31';
 const XHRIS_REPO_URL   = 'https://github.com/Eric-Xhris/XHRIS-MD-V2';
-
-// Code de pairing personnalisé. DOIT être 8 chars de l'alphabet Crockford Base32
-// (pas de I, O, U, L ni 0) sinon WhatsApp le rejette en silence.
-// Pour écarter la piste "custom code", remplacer par null (Baileys génère le code).
-const PAIRING_CODE = "XHR1SMD2";
-
 const sessionDir = path.join(__dirname, "session");
 
 async function sendSessionMessage(sock, jid, sessionString) {
@@ -45,17 +39,14 @@ router.get('/', async (req, res) => {
     const id  = princeId();
     const num = (req.query.number || "").replace(/[^0-9]/g, '');
 
-    const log = (...a) => console.log('[PAIR]', ...a);
-
     if (!num) {
         return res.status(400).json({ code: "Numéro manquant" });
     }
 
     let responseSent   = false;
     let sessionCleaned = false;
-    let dead = false;
-    let retries = 0;
-    const MAX_RETRIES = 5;
+    let dead           = false;
+    let codeRequested  = false;
 
     async function cleanUp() {
         if (!sessionCleaned) {
@@ -71,29 +62,56 @@ router.get('/', async (req, res) => {
         }
     }
 
-    // Termine proprement (ferme la socket, annule le timeout). N'envoie une réponse
-    // HTTP que si on n'a pas déjà renvoyé le code.
-    function finish(statusCode, body, sock) {
-        dead = true;
-        clearTimeout(globalTimeout);
-        try { sock?.ws?.close(); } catch (_) {}
-        if (statusCode) sendOnce(statusCode, body);
+    const globalTimeout = setTimeout(() => {
+        if (!dead) {
+            dead = true;
+            sendOnce(504, { code: "Timeout — réessayez dans un instant" });
+            try { Prince?.ws?.close(); } catch (_) {}
+            cleanUp();
+        }
+    }, 60000);
+
+    let Prince;
+
+    // Demande le code. Réessaie si la socket n'est pas encore prête (428).
+    async function askCode(attempt = 1) {
+        if (codeRequested || dead || Prince.authState.creds.registered) return;
+        try {
+            // Vérifier que la WebSocket est bien ouverte avant d'envoyer
+            if (!Prince.ws || Prince.ws.readyState !== Prince.ws.OPEN) {
+                if (attempt <= 10) {
+                    console.log(`[PAIR] WS pas encore prête (tentative ${attempt}), retry dans 1s...`);
+                    setTimeout(() => askCode(attempt + 1), 1000);
+                    return;
+                }
+            }
+            codeRequested = true;
+            console.log(`[PAIR] Demande du code pour ${num} (tentative ${attempt})...`);
+            let code = await Prince.requestPairingCode(num, "XHR1SMD2");
+            code = code?.match(/.{1,4}/g)?.join('-') || code;
+            console.log(`[PAIR] ✅ Code généré pour ${num}: ${code}`);
+            sendOnce(200, { code });
+        } catch (err) {
+            const sc = err?.output?.statusCode;
+            console.error(`[PAIR] requestPairingCode ERROR (${sc}):`, err?.message || err);
+            codeRequested = false;
+            // 428 = socket pas prête → réessayer
+            if (sc === 428 && attempt <= 10 && !dead) {
+                console.log(`[PAIR] 428 — retry dans 1.5s (tentative ${attempt + 1})...`);
+                setTimeout(() => askCode(attempt + 1), 1500);
+            } else if (!dead) {
+                dead = true;
+                clearTimeout(globalTimeout);
+                cleanUp();
+                sendOnce(503, { code: "Erreur génération du code — réessayez" });
+            }
+        }
     }
 
-    // Timeout uniquement sur la livraison du CODE : une fois le code renvoyé, on
-    // l'annule pour laisser l'utilisateur saisir le code et le pairing aboutir.
-    const globalTimeout = setTimeout(() => {
-        if (!dead && !responseSent) {
-            dead = true;
-            log(`Timeout — aucun code livré en 55s pour ${num}`);
-            sendOnce(504, { code: "Timeout — réessayez dans un instant" });
-        }
-    }, 55000);
-
-    async function connectToWA() {
+    async function startPairing() {
         const { state, saveCreds } = await useMultiFileAuthState(path.join(sessionDir, id));
 
-        const Prince = princeConnect({
+        Prince = princeConnect({
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
@@ -104,138 +122,149 @@ router.get('/', async (req, res) => {
             shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
             getMessage: async () => undefined,
             markOnlineOnConnect: false,
-            connectTimeoutMs: 60_000,
-            keepAliveIntervalMs: 30_000,
-            retryRequestDelayMs: 3_000,
+            connectTimeoutMs: 60000,
+            keepAliveIntervalMs: 30000,
+            retryRequestDelayMs: 3000,
         });
 
         Prince.ev.on('creds.update', saveCreds);
 
-        // ── Demande du pairing code juste après la création du socket ────────
-        // Pattern éprouvé (type Levanter) : on attend ~3s que la socket s'initialise,
-        // puis on demande le code UNE fois, hors event. Pas de connecting/qr.
-        if (!Prince.authState.creds.registered && !responseSent) {
-            try {
-                log(`Demande du code pour ${num}...`);
-                await delay(3000);
-                if (dead) return;
-                const code = PAIRING_CODE
-                    ? await Prince.requestPairingCode(num, PAIRING_CODE)
-                    : await Prince.requestPairingCode(num);
-                if (dead) return;
-                log(`Code généré pour ${num}: ${code}`);
-                sendOnce(200, { code });
-                clearTimeout(globalTimeout);
-            } catch (err) {
-                log(`requestPairingCode ERROR pour ${num}: ${err?.message || err}`);
-                console.error('[PAIR] Full error:', err);
-                // On ferme pour laisser le handler 'close' retenter une reconnexion,
-                // sinon le timeout global renverra une erreur propre.
-                try { Prince.ws?.close(); } catch (_) {}
-                return;
-            }
-        }
-
-        // ── Listeners attachés APRÈS la demande de code ──────────────────────
         Prince.ev.on("connection.update", async (s) => {
             if (dead) return;
             const { connection, lastDisconnect } = s;
-            if (connection) log(`connection.update -> ${connection}`);
 
-            // ── Connexion établie : lire les creds et envoyer la session ─────
+            // 'connecting' = la WS vient de s'ouvrir et le handshake démarre.
+            // C'est LE moment où ws.isOpen devient true → on peut demander le code.
+            // askCode() revérifie ws.readyState et réessaie si besoin (anti-428).
+            if (connection === "connecting" && !codeRequested && !Prince.authState.creds.registered) {
+                askCode(1);
+            }
+
+            // On IGNORE le qr (normal en pairing). Jamais traité comme erreur.
+
             if (connection === "open") {
-                log(`Connexion ouverte pour ${num}`);
+                console.log(`[PAIR] Connexion ouverte pour ${num}`);
                 await delay(6000);
                 if (dead) return;
 
                 let sessionData = null;
-                for (let i = 0; i < 10 && !sessionData; i++) {
+                for (let i = 0; i < 12 && !sessionData; i++) {
                     try {
                         const credsPath = path.join(sessionDir, id, "creds.json");
                         if (fs.existsSync(credsPath)) {
                             const data = fs.readFileSync(credsPath);
                             if (data && data.length > 100) sessionData = data;
                         }
-                    } catch (e) { log(`Read creds error: ${e.message}`); }
+                    } catch (e) { console.error("[PAIR] Read creds error:", e.message); }
                     if (!sessionData) await delay(3000);
                 }
 
                 if (!sessionData) {
-                    log(`Impossible de lire la session pour ${num}`);
-                    await cleanUp();
-                    finish(500, { code: "Impossible de lire la session" }, Prince);
-                    return;
+                    dead = true; clearTimeout(globalTimeout); await cleanUp(); return;
                 }
 
                 try {
                     const b64 = zlib.gzipSync(sessionData).toString('base64');
                     const sessionString = 'XHRIS-MD!' + b64;
-
                     await delay(2000);
                     if (dead) return;
-
                     let sent = false;
                     for (let i = 0; i < 5 && !sent; i++) {
                         try {
                             await sendSessionMessage(Prince, Prince.user.id, sessionString);
                             sent = true;
-                            log(`Session envoyée pour ${num}`);
+                            console.log(`[PAIR] Session envoyée pour ${num}`);
                         } catch (e) {
-                            log(`Send error (essai ${i + 1}): ${e.message}`);
+                            console.error("[PAIR] Send error:", e.message);
                             if (i < 4) await delay(3000);
                         }
                     }
                 } catch (e) {
-                    log(`Session build error: ${e.message}`);
+                    console.error("[PAIR] Session build error:", e.message);
                 } finally {
+                    dead = true; clearTimeout(globalTimeout);
+                    try { Prince.ws?.close(); } catch (_) {}
                     await cleanUp();
-                    finish(null, null, Prince);
                 }
                 return;
             }
 
-            // ── Connexion fermée ─────────────────────────────────────────────
             if (connection === "close") {
                 const statusCode = lastDisconnect?.error?.output?.statusCode;
-                log(`Connexion fermée pour ${num}, code: ${statusCode}`);
-                if (dead) return;
+                console.log(`[PAIR] Connexion fermée, code: ${statusCode}`);
 
-                // 515 = "restart required" après un pairing réussi → reconnexion normale
                 if (statusCode === 515) {
-                    log(`Restart requis (515) — reconnexion pour finaliser...`);
-                    connectToWA();
+                    console.log("[PAIR] 515 restart required — reconnexion...");
+                    if (!dead) setTimeout(() => { reconnectAfterPair(); }, 2000);
                     return;
                 }
-
-                // numéro invalide / déconnecté / interdit
-                if (statusCode === 401 || statusCode === 403 || statusCode === 405) {
-                    log(`Numéro invalide ou déjà connecté (code ${statusCode})`);
-                    await cleanUp();
-                    finish(401, { code: "Numéro invalide ou déjà connecté — vérifiez le numéro" }, Prince);
+                if (statusCode === 401) {
+                    if (!dead) { dead = true; clearTimeout(globalTimeout); await cleanUp(); }
                     return;
                 }
-
-                // autres fermetures : reconnexion avec retry limité
-                if (retries++ < MAX_RETRIES) {
-                    log(`Reconnexion ${retries}/${MAX_RETRIES}...`);
-                    await delay(3000);
-                    connectToWA();
-                } else {
-                    log(`Trop d'échecs de connexion pour ${num}`);
-                    await cleanUp();
-                    finish(503, { code: "Connexion instable — réessayez dans un instant" }, Prince);
+                // Si la connexion se ferme AVANT d'avoir le code et qu'on peut réessayer
+                if (!codeRequested && !responseSent && !dead) {
+                    console.log("[PAIR] Fermeture avant code — relance de la connexion...");
+                    setTimeout(() => { startPairing().catch(e => console.error(e.message)); }, 3000);
                 }
             }
         });
     }
 
+    async function reconnectAfterPair() {
+        if (dead) return;
+        try {
+            const { state: st2, saveCreds: sc2 } = await useMultiFileAuthState(path.join(sessionDir, id));
+            const P2 = princeConnect({
+                auth: {
+                    creds: st2.creds,
+                    keys: makeCacheableSignalKeyStore(st2.keys, pino({ level: "silent" })),
+                },
+                printQRInTerminal: false,
+                logger: pino({ level: "silent" }).child({ level: "silent" }),
+                browser: Browsers.ubuntu("Chrome"),
+                markOnlineOnConnect: false,
+            });
+            P2.ev.on('creds.update', sc2);
+            P2.ev.on("connection.update", async (u) => {
+                if (dead) return;
+                if (u.connection === "open") {
+                    console.log(`[PAIR] Reconnexion ouverte pour ${num}`);
+                    await delay(6000);
+                    let sd = null;
+                    for (let i = 0; i < 12 && !sd; i++) {
+                        try {
+                            const cp = path.join(sessionDir, id, "creds.json");
+                            if (fs.existsSync(cp)) {
+                                const d = fs.readFileSync(cp);
+                                if (d && d.length > 100) sd = d;
+                            }
+                        } catch (_) {}
+                        if (!sd) await delay(3000);
+                    }
+                    if (sd) {
+                        try {
+                            const b64 = zlib.gzipSync(sd).toString('base64');
+                            await sendSessionMessage(P2, P2.user.id, 'XHRIS-MD!' + b64);
+                            console.log(`[PAIR] Session envoyée pour ${num}`);
+                        } catch (e) { console.error("[PAIR] Send error (reconnect):", e.message); }
+                    }
+                    dead = true; clearTimeout(globalTimeout);
+                    try { P2.ws?.close(); } catch (_) {}
+                    await cleanUp();
+                }
+            });
+        } catch (e) {
+            console.error("[PAIR] reconnectAfterPair error:", e.message);
+        }
+    }
+
     try {
-        await connectToWA();
+        await startPairing();
     } catch (err) {
-        log(`Fatal error: ${err?.message || err}`);
-        console.error('[PAIR] Full fatal error:', err);
-        await cleanUp();
-        finish(500, { code: "Service is Currently Unavailable" }, null);
+        console.error("[PAIR] Fatal error:", err?.message || err);
+        dead = true; clearTimeout(globalTimeout); await cleanUp();
+        sendOnce(500, { code: "Service is Currently Unavailable" });
     }
 });
 
