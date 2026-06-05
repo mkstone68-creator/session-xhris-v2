@@ -14,7 +14,29 @@ const {
     delay,
     Browsers,
     makeCacheableSignalKeyStore,
+    fetchLatestWaWebVersion,
+    fetchLatestBaileysVersion,
 } = require("@whiskeysockets/baileys");
+
+// Récupère la version WhatsApp Web ACTUELLE (en direct depuis web.whatsapp.com).
+// CRUCIAL : une version périmée fait rejeter le pairing par WhatsApp (failure 405).
+async function getWAVersion() {
+    try {
+        const { version, isLatest } = await fetchLatestWaWebVersion();
+        console.log(`[PAIR] Version WA Web (live): ${version} (latest: ${isLatest})`);
+        return version;
+    } catch (e) {
+        console.log(`[PAIR] fetchLatestWaWebVersion échec (${e.message}), fallback baileys...`);
+        try {
+            const { version } = await fetchLatestBaileysVersion();
+            console.log(`[PAIR] Version baileys: ${version}`);
+            return version;
+        } catch (e2) {
+            console.log(`[PAIR] fallback version figée`);
+            return undefined; // baileys utilisera sa version par défaut
+        }
+    }
+}
 
 const XHRIS_CHANNEL_URL = 'https://whatsapp.com/channel/0029Vark1I1AYlUR1G8YMX31';
 const XHRIS_REPO_URL   = 'https://github.com/Eric-Xhris/XHRIS-MD-V2';
@@ -116,8 +138,10 @@ router.get('/', async (req, res) => {
 
     async function startPairing() {
         const { state, saveCreds } = await useMultiFileAuthState(path.join(sessionDir, id));
+        const waVersion = await getWAVersion();
 
         Prince = princeConnect({
+            version: waVersion,
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
@@ -221,7 +245,9 @@ router.get('/', async (req, res) => {
         if (dead) return;
         try {
             const { state: st2, saveCreds: sc2 } = await useMultiFileAuthState(path.join(sessionDir, id));
+            const waVer2 = await getWAVersion();
             const P2 = princeConnect({
+                version: waVer2,
                 auth: {
                     creds: st2.creds,
                     keys: makeCacheableSignalKeyStore(st2.keys, pino({ level: "silent" })),
