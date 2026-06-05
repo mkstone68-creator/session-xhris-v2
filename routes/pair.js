@@ -161,6 +161,19 @@ router.get('/', async (req, res) => {
 
         Prince.ev.on('creds.update', saveCreds);
 
+        // DEBUG : capturer le nœud de failure COMPLET pour voir la vraie raison du rejet
+        try {
+            Prince.ws.on('CB:failure', (node) => {
+                console.log('[PAIR][RAW] CB:failure node:', JSON.stringify(node?.attrs || node));
+            });
+            Prince.ws.on('CB:stream:error', (node) => {
+                console.log('[PAIR][RAW] stream:error node:', JSON.stringify(node?.attrs || node));
+            });
+            Prince.ws.on('CB:xmlstreamend', () => {
+                console.log('[PAIR][RAW] xmlstreamend (WhatsApp a coupé le flux)');
+            });
+        } catch (e) { console.log('[PAIR][RAW] listener setup error:', e.message); }
+
         Prince.ev.on("connection.update", async (s) => {
             if (dead) return;
             const { connection, lastDisconnect } = s;
