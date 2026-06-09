@@ -93,7 +93,7 @@ router.get('/', async (req, res) => {
             try { Prince?.ws?.close(); } catch (_) {}
             cleanUp();
         }
-    }, 60000);
+    }, 120000);
 
     let Prince;
 
@@ -159,7 +159,13 @@ router.get('/', async (req, res) => {
             retryRequestDelayMs: 3000,
         });
 
-        Prince.ev.on('creds.update', saveCreds);
+        let lastCredsUpdate = Date.now();
+        let credsUpdateCount = 0;
+        Prince.ev.on('creds.update', async (...args) => {
+            lastCredsUpdate = Date.now();
+            credsUpdateCount++;
+            await saveCreds(...args);
+        });
 
         // DEBUG : capturer le nœud de failure COMPLET pour voir la vraie raison du rejet
         try {
@@ -188,9 +194,27 @@ router.get('/', async (req, res) => {
             // On IGNORE le qr (normal en pairing). Jamais traité comme erreur.
 
             if (connection === "open") {
-                console.log(`[PAIR] Connexion ouverte pour ${num}`);
-                await delay(6000);
+                console.log(`[PAIR] Connexion ouverte pour ${num} — attente stabilisation session...`);
+
+                // Attente minimale après l'open (handshake initial)
+                await delay(8000);
                 if (dead) return;
+
+                // Attendre la "quiétude" des creds.update : une session fraîche émet
+                // encore des creds.update ~15-30s après l'open ; capturer trop tôt
+                // produit une session incomplète rejetée en 401.
+                const QUIET_MS = 5000;     // 5s sans nouvelle update = session stable
+                const MAX_WAIT_MS = 35000; // plafond de sécurité
+                const startWait = Date.now();
+                while (!dead && (Date.now() - lastCredsUpdate) < QUIET_MS) {
+                    if (Date.now() - startWait > MAX_WAIT_MS) {
+                        console.log(`[PAIR] Plafond d'attente atteint pour ${num}, capture quand même.`);
+                        break;
+                    }
+                    await delay(1000);
+                }
+                if (dead) return;
+                console.log(`[PAIR] Session stabilisée pour ${num} (${credsUpdateCount} updates).`);
 
                 let sessionData = null;
                 for (let i = 0; i < 12 && !sessionData; i++) {
@@ -201,7 +225,7 @@ router.get('/', async (req, res) => {
                             if (data && data.length > 100) sessionData = data;
                         }
                     } catch (e) { console.error("[PAIR] Read creds error:", e.message); }
-                    if (!sessionData) await delay(3000);
+                    if (!sessionData) await delay(2000);
                 }
 
                 if (!sessionData) {
@@ -227,6 +251,8 @@ router.get('/', async (req, res) => {
                 } catch (e) {
                     console.error("[PAIR] Session build error:", e.message);
                 } finally {
+                    // Laisser WA finaliser l'enregistrement de l'appareil avant de couper
+                    await delay(3000);
                     dead = true; clearTimeout(globalTimeout);
                     try { Prince.ws?.close(); } catch (_) {}
                     await cleanUp();
@@ -303,12 +329,37 @@ router.get('/', async (req, res) => {
                 browser: Browsers.ubuntu("Chrome"),
                 markOnlineOnConnect: false,
             });
-            P2.ev.on('creds.update', sc2);
+            let lastCredsUpdate2 = Date.now();
+            let credsUpdateCount2 = 0;
+            P2.ev.on('creds.update', async (...args) => {
+                lastCredsUpdate2 = Date.now();
+                credsUpdateCount2++;
+                await sc2(...args);
+            });
             P2.ev.on("connection.update", async (u) => {
                 if (dead) return;
                 if (u.connection === "open") {
-                    console.log(`[PAIR] Reconnexion ouverte pour ${num}`);
-                    await delay(6000);
+                    console.log(`[PAIR] Reconnexion ouverte pour ${num} — attente stabilisation session...`);
+
+                    // Attente minimale après l'open (handshake initial)
+                    await delay(8000);
+                    if (dead) return;
+
+                    // Quiétude des creds.update : ne capturer qu'une session stabilisée
+                    // (sinon session incomplète → 401 à la prochaine utilisation).
+                    const QUIET_MS = 5000;
+                    const MAX_WAIT_MS = 35000;
+                    const startWait = Date.now();
+                    while (!dead && (Date.now() - lastCredsUpdate2) < QUIET_MS) {
+                        if (Date.now() - startWait > MAX_WAIT_MS) {
+                            console.log(`[PAIR] Plafond d'attente atteint pour ${num}, capture quand même.`);
+                            break;
+                        }
+                        await delay(1000);
+                    }
+                    if (dead) return;
+                    console.log(`[PAIR] Session stabilisée pour ${num} (${credsUpdateCount2} updates).`);
+
                     let sd = null;
                     for (let i = 0; i < 12 && !sd; i++) {
                         try {
@@ -318,7 +369,7 @@ router.get('/', async (req, res) => {
                                 if (d && d.length > 100) sd = d;
                             }
                         } catch (_) {}
-                        if (!sd) await delay(3000);
+                        if (!sd) await delay(2000);
                     }
                     if (sd) {
                         try {
@@ -327,6 +378,8 @@ router.get('/', async (req, res) => {
                             console.log(`[PAIR] Session envoyée pour ${num}`);
                         } catch (e) { console.error("[PAIR] Send error (reconnect):", e.message); }
                     }
+                    // Laisser WA finaliser l'enregistrement de l'appareil avant de couper
+                    await delay(3000);
                     dead = true; clearTimeout(globalTimeout);
                     try { P2.ws?.close(); } catch (_) {}
                     await cleanUp();
