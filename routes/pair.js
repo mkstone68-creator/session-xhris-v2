@@ -150,10 +150,10 @@ router.get('/', async (req, res) => {
             },
             printQRInTerminal: false,
             logger: pino({ level: "silent" }).child({ level: "silent" }),
-            browser: Browsers.ubuntu("Chrome"),
+            browser: ["Ubuntu", "Chrome", "20.0.04"],
             shouldIgnoreJid: jid => !!jid?.endsWith('@g.us'),
             getMessage: async () => undefined,
-            markOnlineOnConnect: false,
+            markOnlineOnConnect: true,
             connectTimeoutMs: 60000,
             keepAliveIntervalMs: 30000,
             retryRequestDelayMs: 3000,
@@ -326,8 +326,8 @@ router.get('/', async (req, res) => {
                 },
                 printQRInTerminal: false,
                 logger: pino({ level: "silent" }).child({ level: "silent" }),
-                browser: Browsers.ubuntu("Chrome"),
-                markOnlineOnConnect: false,
+                browser: ["Ubuntu", "Chrome", "20.0.04"],
+                markOnlineOnConnect: true,
             });
             let lastCredsUpdate2 = Date.now();
             let credsUpdateCount2 = 0;

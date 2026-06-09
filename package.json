@@ -14,7 +14,7 @@
   "author": "Eric-Xhris",
   "license": "GPL-3.0 license",
   "dependencies": {
-    "@whiskeysockets/baileys": "npm:baileys@6.7.23",
+    "@whiskeysockets/baileys": "npm:@whiskeysockets/baileys@7.0.0-rc13",
     "bcryptjs": "^3.0.2",
     "body-parser": "*",
     "express": "*",
